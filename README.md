@@ -1,50 +1,55 @@
-# Custom Let's Encrypt TLS issuer
+# Minimal Let's Encrypt CLI
 
-The goal of this project is to generate a binary as small as possible, which can generate valid certificates
-issued by Let's Encrypt, while fetching necessary tokens from a remote keystore.
+The goal of this project is to offer a binary, as small as possible, which can generate valid TLS certificates
+issued by Let's Encrypt, while fetching necessary tokens from a remote keystore (Azure Key Vault).
 
-> The current size of the built executable is approximately `12.87Mb`, while the `lego` CLI is `34Mb` and does not include Azure Key Vault integration.
+> The current size of the built executable is approximately `13Mb`, while the `lego` CLI is `34Mb` and does not include Azure Key Vault integration. Binaries can be fetched from [latest release](https://github.com/charbonnierg/letsgo/releases/latest).
 
-
-This library is designed to work only with DNS-01 challenges, using Digital Ocean provider. If we use another DNS provider in the project, we might update this tool accordingly.
+This library is designed to work only with DNS-01 challenges, using Digital Ocean provider.
 
 ## Configuration
 
-### DNS Provider authentication
+`letsgo` can  only be configured through environment variables. It does not accept any command line argument.
 
-The token used to authenticate against Digital Ocean API (to update DNS records) can be specified through 3 different ways:
+### Authentication
 
-- `DO_AUTH_TOKEN_VAULT`: Name of an Azure Keyvault or URL pointing to an Azure Key Vault.
+| Environment Variable | Optional | Default         | Description                                      |
+|----------------------|----------|-----------------|--------------------------------------------------|
+| `DO_AUTH_TOKEN_VAULT`  | ✅    |                 | Name or URI of Azure Keyvault holding auth token |
+| `DO_AUTH_TOKEN_SECRET` | ✅    | `"do-auth-token"` | Name of secret stored in Azure Keyvault          |
+| `DO_AUTH_TOKEN_FILE`   | ✅    |                 | Path to file holding auth token                  |
+| `DO_AUTH_TOKEN`        | ✅    |                 | Auth token value                                 |
 
-> When `DO_AUTH_TOKEN_VAULT` is specified, the name of the secret holding the API token can also be configured using `DO_AUTH_TOKEN_SECRET` environment variable. By default secret name is `do-auth-token`.
-
-- `DO_AUTH_TOKEN_FILE`: A path to a file holding the API token.
-- `DO_AUTH_TOKEN`: The API token.
+> 💥 At least one of `DO_AUTH_TOKEN_VAULT`, `DO_AUTH_TOKEN_FILE`, or `DO_AUTH_TOKEN` must be set to a non-null value
 
 
-### Domains configuration
+### Domains
 
-Domains for which certificate should be generated can be specifeid through environment variable:
 
-- `DOMAINS`: A comma-separated list of domains for which certificate should be valid.
+| Environment Variable | Optional | Default         | Description                                      |
+|----------------------|----------|-----------------|--------------------------------------------------|
+| `DOMAINS`            | 💥   |                 | Comma-separated list of domain names             |
 
-### Let's Encrypt Account configuration
+> `DOMAINS` environment variable must be set to a non-null value.
 
-Let's Encrypt certificates are requested for an account. In order to generate certificates for a known account, environment variables can be used to configure account information:
+### Let's Encrypt Account
 
-- `ACCOUNT_EMAIL`: Email for which certificates are issued.
 
-- `ACCOUNT_KEY_FILE` *(optional)*: Path to a file holding account private key. Default to `./account.key`.
+| Environment Variable | Optional | Default         | Description                                                                                 |
+|----------------------|----------|-----------------|---------------------------------------------------------------------------------------------|
+| `ACCOUNT_EMAIL`        | 💥     |                 | Email of Let's Encrypt account for which certificate is issued                              |
+| `ACCOUNT_KEY_FILE`     | ✅   | `"./account.key"` | Path to account key file. If account key does not exist, it is generated and saved to path. |
+| `LE_TOS_AGREED`        | ✅    | `true`            | Agree to Let's Encrypt terms of usage                                                       |
 
-- `LE_TOS_AGREED` *(optional)*: Whether user agrees to Let's Encrypt terms of usage or not. Default to `true`.
+> `ACCOUNT_EMAIL` environment variable must be set to a non-null value.
 
-### CA Directory configuration
+### CA Directory
 
-By default, certificates are issued by [Let's Encrypt Staging Environment Certificate Authorities](https://letsencrypt.org/docs/staging-environment/), but CA directory can be configured through environment variables:
 
-- `CA_DIR` *(optional)*: URL pointing to CA directory. Default to `STAGING` which uses `https://acme-staging-v02.api.letsencrypt.org/directory`. Allowed values are `PRODUCTION`, `STAGING`, `TEST` or any other value.
-
-- `LE_CRT_KEY_TYPE` *(optional)*: CA Certificate key type. Default to `RSA2048`. Both Let's Encrypt staging and production environments use `RSA2048` keys.
+| Environment Variable | Required | Default   | Description                                                                                                             |
+|----------------------|----------|-----------|-------------------------------------------------------------------------------------------------------------------------|
+| `CA_DIR`               | ✅    | `"STAGING"`   | Name of CA directory environment or URL to CA directory. Allowed values are [PRODUCTION](https://letsencrypt.org/certificates/), [STAGING](https://letsencrypt.org/docs/staging-environment/), [TEST](https://hub.docker.com/r/containous/boulder), or any http URL. |
+| `LE_CRT_KEY_TYPE`      | ✅    | `"RSA2048"` | Certificate key type. Both Let's Encrypt staging and production environments use the `RSA2048` key type.                  |
 
 ## Output
 
@@ -56,7 +61,7 @@ This tool generates 3 files:
 
 - `issuer.crt`: PEM-encoded issuer certificate.
 
-## Examples
+## Usage examples
 
 - Generate a certificate using token value:
 
@@ -67,6 +72,14 @@ export DO_AUTH_TOKEN="xxxxxxxxxxxxxxxxxxxx"
 # Run binary to generate certs
 letsgo
 ```
+
+> The command generates the following files:
+>
+> - `example.com.crt`: PEM-encoded x509 certificate
+> - `example.com.key`: PEM-encoded RSA private key
+> - `example.com.issuer.crt`: PEM-encoded x509 issuer certificate
+>
+> If account private key did not exist (default file is `./account.key`), this command also generates the private key file.
 
 - Generate a certificate using token filepath :
 
@@ -83,7 +96,7 @@ letsgo
 ```bash
 export DOMAINS="example.com,*.example.com"
 export ACCOUNT_EMAIL="admin@example.com"
-export DO_AUTH_TOKEN_VAULT="dev-quaraneb-jqtcetl-kv"
+export DO_AUTH_TOKEN_VAULT="example-keyvault"
 # Run binary to generate certs
 letsgo
 ```
@@ -93,7 +106,7 @@ letsgo
 ```bash
 export DOMAINS="example.com,*.example.com"
 export ACCOUNT_EMAIL="admin@example.com"
-export DO_AUTH_TOKEN_VAULT="https://dev-quaraneb-jqtcetl-kv.vault.azure.net/"
+export DO_AUTH_TOKEN_VAULT="https://example-keyvault.vault.azure.net/"
 export DO_AUTH_TOKEN_SECRET="do-auth-token"
 # Run binary to generate certs
 letsgo
