@@ -1,0 +1,14 @@
+# .goreleaser.yml
+builds:
+  - id: "letsgo"
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+      - arm
+    goarm:
+      - "6"
+      - "7"
