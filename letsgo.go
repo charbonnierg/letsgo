@@ -16,11 +16,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets"
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
+	"github.com/go-acme/lego/v4/challenge/dns01"
 	"github.com/go-acme/lego/v4/lego"
 	"github.com/go-acme/lego/v4/providers/dns/digitalocean"
 	"github.com/go-acme/lego/v4/registration"
@@ -36,6 +38,9 @@ type UserConfig struct {
 	TermsOfServiceAgreed bool
 	Domains              []string
 	AuthToken            string
+	DisableCP            bool
+	DNSResolvers         []string
+	DNSTimeout           time.Duration
 }
 
 // User type that implements acme.User
@@ -268,6 +273,22 @@ func NewConfig() (UserConfig, error) {
 	if err != nil {
 		return UserConfig{}, err
 	}
+	// Get resolvers
+	rawDNSResolvers := getEnv("DNS_RESOLVERS", "")
+	dnsResolvers := []string{}
+	if rawDNSResolvers != "" {
+		dnsResolvers = strings.Split(rawDNSResolvers, ",")
+	}
+	// Get complete duration challenge option
+	disableCPOption, err := strconv.ParseBool(getEnv("DISABLE_CP", "true"))
+	if err != nil {
+		return UserConfig{}, err
+	}
+	// Get DNS timeout options
+	dnsTimeout, err := strconv.ParseFloat(getEnv("DNS_TIMEOUT", "0"), 32)
+	if err != nil {
+		return UserConfig{}, err
+	}
 	// Return complete user config
 	return UserConfig{
 		Email:                email,
@@ -277,10 +298,13 @@ func NewConfig() (UserConfig, error) {
 		TermsOfServiceAgreed: tosAgreed,
 		Domains:              domains,
 		AuthToken:            token,
+		DNSResolvers:         dnsResolvers,
+		DisableCP:            disableCPOption,
+		DNSTimeout:           time.Duration(dnsTimeout) * time.Second,
 	}, nil
 }
 
-func NewClient(config UserConfig, user *User) (lego.Client, error) {
+func NewClient(config UserConfig, user *User) lego.Client {
 	// Generate config for user
 	legoConfig := lego.NewConfig(user)
 	// The ACME URL for our ACME v2 staging environment
@@ -291,28 +315,39 @@ func NewClient(config UserConfig, user *User) (lego.Client, error) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// Export env variable
-	os.Setenv("DO_AUTH_TOKEN", config.AuthToken)
-	// Reset env variable when function returns
-	defer os.Setenv("DO_AUTH_TOKEN", "")
+	providerConfig := digitalocean.NewDefaultConfig()
+	providerConfig.AuthToken = config.AuthToken
+	// Use a propagation timeout of 1 minute and 30 seconds
+	providerConfig.PropagationTimeout = time.Duration(time.Second * 90)
 	// Create DNS provider
-	dnsProvider, err := digitalocean.NewDNSProvider()
+	dnsProvider, err := digitalocean.NewDNSProviderConfig(providerConfig)
 	if err != nil {
-		return *client, err
+		log.Fatal(err)
 	}
 	// Use DNS provider
-	err = client.Challenge.SetDNS01Provider(dnsProvider)
+	err = client.Challenge.SetDNS01Provider(dnsProvider,
+		dns01.CondOption(
+			len(config.DNSResolvers) > 0,
+			dns01.AddRecursiveNameservers(dns01.ParseNameservers(config.DNSResolvers)),
+		),
+		dns01.CondOption(config.DisableCP,
+			dns01.DisableCompletePropagationRequirement(),
+		),
+		dns01.CondOption(config.DNSTimeout > 0,
+			dns01.AddDNSTimeout(config.DNSTimeout),
+		),
+	)
 	if err != nil {
-		return *client, err
+		log.Fatal(err)
 	}
 	// New users will need to register
 	reg, err := client.Registration.Register(registration.RegisterOptions{TermsOfServiceAgreed: true})
 	if err != nil {
-		return *client, err
+		log.Fatal(err)
 	}
 	user.Registration = reg
 	// Return client
-	return *client, nil
+	return *client
 }
 
 func main() {
@@ -332,10 +367,7 @@ func main() {
 		key:   config.Key,
 	}
 	// Generate lego client
-	client, err := NewClient(config, &user)
-	if err != nil {
-		log.Fatal(err)
-	}
+	client := NewClient(config, &user)
 	// Gather request
 	request := certificate.ObtainRequest{
 		Domains: config.Domains,
