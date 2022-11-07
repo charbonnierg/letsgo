@@ -1,7 +1,6 @@
-package main
+package letsgo
 
 import (
-	"context"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -9,8 +8,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
-	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -18,8 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets"
+	"github.com/charbonnierg/letsgo/stores"
 	"github.com/go-acme/lego/v4/certcrypto"
 	"github.com/go-acme/lego/v4/certificate"
 	"github.com/go-acme/lego/v4/challenge/dns01"
@@ -52,7 +48,7 @@ type UserConfig struct {
 type User struct {
 	Email        string
 	Registration *registration.Resource
-	key          crypto.PrivateKey
+	Key          crypto.PrivateKey
 }
 
 func (u *User) GetEmail() string {
@@ -62,13 +58,13 @@ func (u User) GetRegistration() *registration.Resource {
 	return u.Registration
 }
 func (u *User) GetPrivateKey() crypto.PrivateKey {
-	return u.key
+	return u.Key
 }
 
 // Sanitize a domain name.
 //
 // The return name can safely be used as a filename.
-func sanitizedDomain(domain string) (string, error) {
+func SanitizedDomain(domain string) (string, error) {
 	safe, err := idna.ToASCII(strings.ReplaceAll(domain, "*", "_"))
 	if err != nil {
 		return safe, err
@@ -155,9 +151,9 @@ func getKeyType(fallback string) (certcrypto.KeyType, error) {
 		return certcrypto.RSA4096, nil
 	case "RSA8192":
 		return certcrypto.RSA8192, nil
+	default:
+		return certcrypto.RSA2048, errors.New("Invalid key type. Allowed values are 'RSA2048', 'RSA4096' and 'RSA8192'.")
 	}
-	err := errors.New("Invalid key type. Allowed values are 'RSA2048', 'RSA4096' and 'RSA8192'.")
-	return certcrypto.RSA2048, err
 }
 
 // Get auth token required to interact with DNS provider.
@@ -166,59 +162,28 @@ func getKeyType(fallback string) (certcrypto.KeyType, error) {
 // - Using `DO_AUTH_TOKEN_FILE` environment variable
 // - Using `DO_AUTH_TOKEN` environment variable
 // - Using `DO_AUTH_TOKEN_VAULT` (and optionally `DO_AUTH_TOKEN_SECRET`) environment variable
-func getAuthToken() (string, error) {
+func getAuthToken(storage stores.Stores) (string, error) {
+	// read from DO_AUTH_TOKEN env variable
+	token := getEnv("DO_AUTH_TOKEN", "")
+	// Check that token is not empty
+	if token != "" {
+		envstore := storage.GetEnvStore()
+		return envstore.GetToken()
+	}
 	// Check if token should be fetched from file
 	tokenFile := getEnv("DO_AUTH_TOKEN_FILE", "")
 	if tokenFile != "" {
-		// Read file
-		rawToken, err := ioutil.ReadFile(tokenFile)
-		// Or return an error
-		if err != nil {
-			return "", err
-		}
-		// Convert to string and strip line break
-		token := strings.TrimSuffix(string(rawToken), "\n")
-		// Check that token is not empty
-		if token == "" {
-			return "", errors.New("Invalid auth token")
-		}
-		// Return token
-		return token, nil
+		filestore := storage.GetFileStore()
+		return filestore.GetToken()
 	}
 	// Check if token should be fetched from vault
 	tokenVault := getEnv("DO_AUTH_TOKEN_VAULT", "")
 	if tokenVault != "" {
-		// Fetch secret name
-		tokenSecret := getEnv("DO_AUTH_TOKEN_SECRET", "do-auth-token")
-		// Generate azure credentials
-		cred, err := azidentity.NewDefaultAzureCredential(nil)
-		if err != nil {
-			return "", err
-		}
-		// Fetch vault URI
-		vaultUri := ""
-		if strings.HasPrefix(tokenVault, "https://") {
-			vaultUri = tokenVault
-		} else {
-			vaultUri = fmt.Sprintf("https://%s.vault.azure.net/", tokenVault)
-		}
-		// Create client to interact with key vault
-		client := azsecrets.NewClient(vaultUri, cred, nil)
-		// Fetch the token
-		resp, err := client.GetSecret(context.TODO(), tokenSecret, "", nil)
-		if err != nil {
-			return "", err
-		}
-		// Return the token (secret value)
-		return strings.TrimSuffix(*resp.Value, "\n"), nil
+		keyvault := storage.GetKeyvaultStore()
+		return keyvault.GetToken()
 	}
-	// Else read from DO_AUTH_TOKEN env variable
-	token := getEnv("DO_AUTH_TOKEN", "")
-	// Check that token is not empty
-	if token == "" {
-		return "", errors.New("Invalid digital ocean token. Use one of 'DO_AUTH_TOKEN_VAULT', 'DO_AUTH_TOKEN_FILE' or 'DO_AUTH_TOKEN' env variable.")
-	}
-	return token, nil
+	// Return an error
+	return "", errors.New("Invalid digital ocean token. Use one of 'DO_AUTH_TOKEN_VAULT', 'DO_AUTH_TOKEN_FILE' or 'DO_AUTH_TOKEN' env variable.")
 }
 
 func getCADir() string {
@@ -233,11 +198,12 @@ func getCADir() string {
 	// This CA URL is configured for a local dev instance of Boulder running in Docker in a VM.
 	case "TEST":
 		return "http://localhost:4000/directory"
+	default:
+		return caEnv
 	}
-	return caEnv
 }
 
-func NewConfig() (UserConfig, error) {
+func NewConfig(storage stores.Stores) (UserConfig, error) {
 	// Define key type
 	keyType, err := getKeyType("RSA2048")
 	if err != nil {
@@ -269,7 +235,7 @@ func NewConfig() (UserConfig, error) {
 	// Define CA directory to which client will request certificates
 	caDir := getCADir()
 	// Fetch auth token
-	token, err := getAuthToken()
+	token, err := getAuthToken(storage)
 	if err != nil {
 		return UserConfig{}, err
 	}
@@ -357,14 +323,14 @@ func main() {
 		log.Fatal(err)
 	}
 	// Generate config for user
-	config, err := NewConfig()
+	config, err := NewConfig(stores.NewStores())
 	if err != nil {
 		log.Fatal(err)
 	}
 	// Generate user
 	user := User{
 		Email: config.Email,
-		key:   config.Key,
+		Key:   config.Key,
 	}
 	// Generate lego client
 	client := NewClient(config, &user)
@@ -379,7 +345,7 @@ func main() {
 		log.Fatal(err)
 	}
 	// Save certificates and key under domain name
-	domain, err := sanitizedDomain(certificates.Domain)
+	domain, err := SanitizedDomain(certificates.Domain)
 	if err != nil {
 		log.Fatal(err)
 	}
