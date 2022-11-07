@@ -2,37 +2,50 @@ package stores
 
 // A store expose the GetToken() method
 // This method may return an error
-type Store interface {
-	GetToken() (string, error)
+type FileStoreProtocol interface {
+	GetToken(path string) (string, error)
+}
+
+type EnvStoreProtocol interface {
+	GetToken(variable string) (string, error)
+}
+
+type KeyvaultStoreProtocol interface {
+	GetToken(uri string, secret string) (string, error)
 }
 
 // Stores used to find DNS auth token
 type Stores struct {
-	Files       Store
-	Environment Store
-	Keyvault    Store
+	Files    FileStoreProtocol
+	Keyvault KeyvaultStoreProtocol
 }
 
 // Access the file store
-func (s *Stores) GetFileStore() Store {
+func (s *Stores) GetFileStore() FileStoreProtocol {
 	return s.Files
 }
 
-// Access the env store
-func (s *Stores) GetEnvStore() Store {
-	return s.Environment
-}
-
 // Access the keyvault store
-func (s *Stores) GetKeyvaultStore() Store {
+func (s *Stores) GetKeyvaultStore() KeyvaultStoreProtocol {
 	return s.Keyvault
 }
 
 // Default stores
 func DefaultStores() Stores {
 	return Stores{
-		Keyvault:    &KeyVault{},
-		Files:       &FileStore{},
-		Environment: &EnvStore{},
+		Keyvault: &KeyVault{},
+		Files:    &FileStore{},
+	}
+}
+
+// Stores used in tests
+func TestStores(token string) Stores {
+	return Stores{
+		Keyvault: &KeyVaultMock{
+			Token: token,
+		},
+		Files: &FileStoreMock{
+			Token: token,
+		},
 	}
 }

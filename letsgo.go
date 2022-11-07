@@ -11,24 +11,22 @@ import (
 )
 
 func main() {
-	// Get current working directory
-	cwd, err := os.Getwd()
 	// Create stores
 	stores := stores.DefaultStores()
 	// Generate config for user
-	config, err := configuration.NewUserConfigFromEnv(stores)
+	config, err := configuration.NewUserConfig(&stores)
 	if err != nil {
 		log.Fatal(err)
 	}
 	// Generate certificate
-	resource, err := client.RequestCertificate(config)
+	resource, err := client.RequestCertificate(*config)
 	if err != nil {
 		log.Fatal(err)
 	}
 	// Write certificate to file
-	certPath := filepath.Join(cwd, config.Alias+".crt")
-	keyPath := filepath.Join(cwd, config.Alias+".key")
-	issuerPath := filepath.Join(cwd, config.Alias+".issuer.crt")
+	certPath := filepath.Join(config.OutputDirectory, config.Filename+".crt")
+	keyPath := filepath.Join(config.OutputDirectory, config.Filename+".key")
+	issuerPath := filepath.Join(config.OutputDirectory, config.Filename+".issuer.crt")
 	err = os.WriteFile(certPath, resource.Certificate, 0o600)
 	if err != nil {
 		log.Fatal(err)
