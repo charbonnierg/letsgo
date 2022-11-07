@@ -9,8 +9,10 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets"
+	"github.com/charbonnierg/letsgo/constants"
 )
 
+// Azure Keyvault store implementation to fetch token from azure keyvault
 type KeyVault struct{}
 
 func (k *KeyVault) GetToken() (string, error) {
@@ -38,14 +40,15 @@ func (k *KeyVault) GetToken() (string, error) {
 	return strings.TrimSuffix(*resp.Value, "\n"), nil
 }
 
+// Utils functions to fetch keyvault options
 func GetVaultURI() (string, error) {
-	tokenVault, ok := os.LookupEnv("DO_AUTH_TOKEN_VAULT")
+	tokenVault, ok := os.LookupEnv(constants.DNS_AUTH_TOKEN_VAULT)
 	if ok {
 		if tokenVault == "" {
-			return "", errors.New("Empty DO_AUTH_TOKEN_VAULT environment variable")
+			return "", errors.New(fmt.Sprintf("Empty %s environment variable", constants.DNS_AUTH_TOKEN_VAULT))
 		}
 	} else {
-		return "", errors.New("Missing DO_AUTH_TOKEN_VAULT environment variable")
+		return "", errors.New(fmt.Sprintf("Missing %s environment variable", constants.DNS_AUTH_TOKEN_VAULT))
 	}
 	if strings.HasPrefix(tokenVault, "https://") {
 		return tokenVault, nil
@@ -55,12 +58,12 @@ func GetVaultURI() (string, error) {
 }
 
 func GetVaultSecretName() (string, error) {
-	tokenSecret, ok := os.LookupEnv("DO_AUTH_TOKEN_SECRET")
+	tokenSecret, ok := os.LookupEnv(constants.DNS_AUTH_TOKEN_SECRET)
 	if !ok {
 		tokenSecret = "do-auth-token"
 	}
 	if tokenSecret == "" {
-		return "", errors.New("Empty DO_AUTH_TOKEN_SECRET environment variable")
+		return "", errors.New(fmt.Sprintf("Empty %s environment variable", constants.DNS_AUTH_TOKEN_SECRET))
 	}
 	return tokenSecret, nil
 }

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charbonnierg/letsgo/constants"
 	"github.com/charbonnierg/letsgo/stores"
 	"github.com/go-acme/lego/v4/certcrypto"
 	"golang.org/x/exp/slices"
@@ -182,11 +183,11 @@ func TestGetCADir(t *testing.T) {
 
 // Test that getAuthToken behaves as expected
 func TestGetAuthTokenFail(t *testing.T) {
-	token, err := getAuthToken(stores.NewStores())
+	token, err := getAuthToken(stores.DefaultStores())
 	if token != "" || err == nil {
 		t.Errorf(fmt.Sprintf("Expected empty token and error, got token: %s", token))
 	}
-	err_want := "Invalid digital ocean token. Use one of 'DO_AUTH_TOKEN_VAULT', 'DO_AUTH_TOKEN_FILE' or 'DO_AUTH_TOKEN' env variable"
+	err_want := "Invalid DNS auth token. Use one of 'DNS_AUTH_TOKEN_VAULT', 'DNS_AUTH_TOKEN_FILE' or 'DNS_AUTH_TOKEN' env variable"
 	err_got := err.Error()
 	if err_want != err_got {
 		t.Errorf(fmt.Sprintf("Invalid error message. Want: %s. Got %s.", err_want, err_got))
@@ -195,8 +196,8 @@ func TestGetAuthTokenFail(t *testing.T) {
 
 func TestGetAuthTokenFromValue(t *testing.T) {
 	want := "XXXXX"
-	t.Setenv("DO_AUTH_TOKEN", want)
-	token, err := getAuthToken(stores.NewStores())
+	t.Setenv("DNS_AUTH_TOKEN", want)
+	token, err := getAuthToken(stores.DefaultStores())
 	if err != nil {
 		t.Errorf(err.Error())
 	}
@@ -211,8 +212,8 @@ func TestGetAuthTokenFromFile(t *testing.T) {
 	want := "XXXXX"
 	data := []byte(want)
 	os.WriteFile(tokenFile, data, 0o600)
-	t.Setenv("DO_AUTH_TOKEN_FILE", tokenFile)
-	token, err := getAuthToken(stores.NewStores())
+	t.Setenv("DNS_AUTH_TOKEN_FILE", tokenFile)
+	token, err := getAuthToken(stores.DefaultStores())
 	if err != nil {
 		t.Errorf(err.Error())
 	}
@@ -223,8 +224,8 @@ func TestGetAuthTokenFromFile(t *testing.T) {
 
 func TestGetAuthTokenFromKeyVault(t *testing.T) {
 	want := "XXXXX"
-	t.Setenv("DO_AUTH_TOKEN_VAULT", "test-vault")
-	storage := stores.NewStores()
+	t.Setenv("DNS_AUTH_TOKEN_VAULT", "test-vault")
+	storage := stores.DefaultStores()
 	storage.Keyvault = &stores.KeyVaultMock{Token: want}
 	token, err := getAuthToken(storage)
 	if err != nil {
@@ -236,7 +237,7 @@ func TestGetAuthTokenFromKeyVault(t *testing.T) {
 }
 
 func TestNewUserConfigFromEnv(t *testing.T) {
-	stores := stores.NewStores()
+	stores := stores.DefaultStores()
 	_, err := NewUserConfigFromEnv(stores)
 	err_want := "A comma-separated list of domain names must be provided through DOMAINS environment variable"
 	if err == nil {
@@ -260,7 +261,7 @@ func TestNewUserConfigFromEnv(t *testing.T) {
 
 	t.Setenv("ACCOUNT_EMAIL", "support@example.com")
 	_, err = NewUserConfigFromEnv(stores)
-	err_want = "Invalid digital ocean token. Use one of 'DO_AUTH_TOKEN_VAULT', 'DO_AUTH_TOKEN_FILE' or 'DO_AUTH_TOKEN' env variable"
+	err_want = "Invalid DNS auth token. Use one of 'DNS_AUTH_TOKEN_VAULT', 'DNS_AUTH_TOKEN_FILE' or 'DNS_AUTH_TOKEN' env variable"
 	if err == nil {
 		t.Fatalf("Expected error. Want: %s. Got: nil", err_want)
 	}
@@ -269,7 +270,7 @@ func TestNewUserConfigFromEnv(t *testing.T) {
 		t.Fatalf("Bad error. Want: %s. Got: %s", err_want, err_got)
 	}
 	want_token := "XXXXX"
-	t.Setenv("DO_AUTH_TOKEN", want_token)
+	t.Setenv("DNS_AUTH_TOKEN", want_token)
 	config, err := NewUserConfigFromEnv(stores)
 
 	want_domains := []string{"example.com"}
@@ -306,5 +307,16 @@ func TestNewUserConfigFromEnv(t *testing.T) {
 	config, err = NewUserConfigFromEnv(stores)
 	if !config.DisableCP {
 		t.Fatalf("Bad DisableCP option. Want: true. Got: false")
+	}
+
+	t.Setenv(constants.LE_TOS_AGREED, "false")
+	err_want = "It is mandatory to agree to Let's Encrypt Term of Usage through LE_TOS_AGREED environment variable"
+	_, err = NewUserConfigFromEnv(stores)
+	if err == nil {
+		t.Fatalf("Expected error. Want: %s. Got: nil", err_want)
+	}
+	err_got = err.Error()
+	if err_got != err_want {
+		t.Fatalf("Bad error. Want: %s. Got: %s", err_want, err_got)
 	}
 }

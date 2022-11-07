@@ -1,5 +1,6 @@
 package stores
 
+// Keyvault mock implementation to return token found in mock instance
 type KeyVaultMock struct {
 	Token string
 }

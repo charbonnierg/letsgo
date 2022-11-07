@@ -2,15 +2,19 @@ package stores
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
+
+	"github.com/charbonnierg/letsgo/constants"
 )
 
+// File store implementation to fetch token from file
 type FileStore struct{}
 
 func (s *FileStore) GetToken() (string, error) {
-	if tokenFile, ok := os.LookupEnv("DO_AUTH_TOKEN_FILE"); ok {
+	if tokenFile, ok := os.LookupEnv(constants.DNS_AUTH_TOKEN_FILE); ok {
 		// Read file
 		rawToken, err := ioutil.ReadFile(tokenFile)
 		// Or return an error
@@ -21,11 +25,11 @@ func (s *FileStore) GetToken() (string, error) {
 		token := strings.TrimSuffix(string(rawToken), "\n")
 		// Check that token is not empty
 		if token == "" {
-			return "", errors.New("Invalid token found in DO_AUTH_TOKEN_FILE file")
+			return "", errors.New(fmt.Sprintf("Invalid token found in %s file", constants.DNS_AUTH_TOKEN_FILE))
 		}
 		// Return token
 		return token, nil
 	}
 	// Return empty token, but without error
-	return "", errors.New("Missing DO_AUTH_TOKEN_FILE environment variable")
+	return "", errors.New(fmt.Sprintf("Missing %s environment variable", constants.DNS_AUTH_TOKEN_FILE))
 }

@@ -17,12 +17,12 @@ This library is designed to work only with DNS-01 challenges, using Digital Ocea
 
 | Environment Variable | Optional | Default         | Description                                      |
 |----------------------|----------|-----------------|--------------------------------------------------|
-| `DO_AUTH_TOKEN_VAULT`  | ✅    |                 | Name or URI of Azure Keyvault holding auth token |
-| `DO_AUTH_TOKEN_SECRET` | ✅    | `"do-auth-token"` | Name of secret stored in Azure Keyvault          |
-| `DO_AUTH_TOKEN_FILE`   | ✅    |                 | Path to file holding auth token                  |
-| `DO_AUTH_TOKEN`        | ✅    |                 | Auth token value                                 |
+| `DNS_AUTH_TOKEN_VAULT`  | ✅    |                 | Name or URI of Azure Keyvault holding auth token |
+| `DNS_AUTH_TOKEN_SECRET` | ✅    | `"do-auth-token"` | Name of secret stored in Azure Keyvault          |
+| `DNS_AUTH_TOKEN_FILE`   | ✅    |                 | Path to file holding auth token                  |
+| `DNS_AUTH_TOKEN`        | ✅    |                 | Auth token value                                 |
 
-> 💥 At least one of `DO_AUTH_TOKEN_VAULT`, `DO_AUTH_TOKEN_FILE`, or `DO_AUTH_TOKEN` must be set to a non-null value
+> 💥 At least one of `DNS_AUTH_TOKEN_VAULT`, `DNS_AUTH_TOKEN_FILE`, or `DNS_AUTH_TOKEN` must be set to a non-null value
 
 
 ### Certificate
@@ -82,7 +82,7 @@ Optionally, it can generate the account private key `account.key` when it does n
 ```bash
 export DOMAINS="example.com,*.example.com"
 export ACCOUNT_EMAIL="admin@example.com"
-export DO_AUTH_TOKEN="xxxxxxxxxxxxxxxxxxxx"
+export DNS_AUTH_TOKEN="xxxxxxxxxxxxxxxxxxxx"
 # Run binary to generate certs
 letsgo
 ```
@@ -100,7 +100,7 @@ letsgo
 ```bash
 export DOMAINS="example.com,*.example.com"
 export ACCOUNT_EMAIL="admin@example.com"
-export DO_AUTH_TOKEN_FILE="$HOME/certificates/.dotoken"
+export DNS_AUTH_TOKEN_FILE="$HOME/certificates/.dotoken"
 letsgo
 ```
 
@@ -109,7 +109,7 @@ letsgo
 ```bash
 export DOMAINS="example.com,*.example.com"
 export ACCOUNT_EMAIL="admin@example.com"
-export DO_AUTH_TOKEN_VAULT="example-keyvault"
+export DNS_AUTH_TOKEN_VAULT="example-keyvault"
 letsgo
 ```
 
@@ -118,8 +118,8 @@ letsgo
 ```bash
 export DOMAINS="example.com,*.example.com"
 export ACCOUNT_EMAIL="admin@example.com"
-export DO_AUTH_TOKEN_VAULT="https://example-keyvault.vault.azure.net/"
-export DO_AUTH_TOKEN_SECRET="do-auth-token"
+export DNS_AUTH_TOKEN_VAULT="https://example-keyvault.vault.azure.net/"
+export DNS_AUTH_TOKEN_SECRET="do-auth-token"
 letsgo
 ```
 
@@ -137,7 +137,7 @@ letsgo
 ```powershell
 $Env:DOMAINS="example.com,*.example.com"
 $Env:ACCOUNT_EMAIL="admin@example.com"
-$Env:DO_AUTH_TOKEN_VAULT="example-keyvault"
+$Env:DNS_AUTH_TOKEN_VAULT="example-keyvault"
 letsgo
 ```
 
@@ -179,7 +179,7 @@ def letsgo(
     cmd_env = os.environ.copy()
     cmd_env["DOMAINS"] = domain
     cmd_env["ACCOUNT_EMAIL"] = account_email
-    cmd_env["DO_AUTH_TOKEN_VAULT"] = keyvault
+    cmd_env["DNS_AUTH_TOKEN_VAULT"] = keyvault
     cmd_env["CA_DIR"] = ca_dir
     # Always write to account.key in temporary directory
     cmd_env["ACCOUNT_KEY_FILE"] = ACCOUNT_KEY

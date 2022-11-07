@@ -8,11 +8,13 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/charbonnierg/letsgo/constants"
 	"github.com/charbonnierg/letsgo/stores"
 	"github.com/go-acme/lego/v4/certcrypto"
 	"golang.org/x/net/idna"
@@ -35,38 +37,42 @@ type UserConfig struct {
 
 func NewUserConfigFromEnv(storage stores.Stores) (UserConfig, error) {
 	// Define key type
-	keyType, err := getKeyType("RSA2048")
+	keyType, err := getKeyType(constants.DEFAULT_LE_CRT_KEY_TYPE)
 	if err != nil {
 		return UserConfig{}, err
 	}
 	// Define boolean indicating whether user agrees to TOS
-	tosAgreed, err := strconv.ParseBool(getEnv("LE_TOS_AGREED", "true"))
+	tosAgreed, err := strconv.ParseBool(getEnv(constants.LE_TOS_AGREED, constants.DEFAULT_LE_TOS_AGREED))
 	if err != nil {
 		return UserConfig{}, err
 	}
+	if !tosAgreed {
+		return UserConfig{}, errors.New(fmt.Sprintf("It is mandatory to agree to Let's Encrypt Term of Usage through %s environment variable", constants.LE_TOS_AGREED))
+	}
 	// Define list of domain names
-	domains := strings.Split(getEnv("DOMAINS", ""), ",")
+	domains := strings.Split(getEnv(constants.DOMAINS, ""), ",")
 	if len(domains) == 0 {
-		return UserConfig{}, errors.New("A comma-separated list of domain names must be provided through DOMAINS environment variable")
+		return UserConfig{}, errors.New(fmt.Sprintf("A comma-separated list of domain names must be provided through %s environment variable", constants.DOMAINS))
 	}
 	if len(domains) == 1 && (domains[0] == "") {
-		return UserConfig{}, errors.New("A comma-separated list of domain names must be provided through DOMAINS environment variable")
+		return UserConfig{}, errors.New(fmt.Sprintf("A comma-separated list of domain names must be provided through %s environment variable", constants.DOMAINS))
 	}
 	defaultAlias, err := SanitizedDomain(domains[0])
 	if err != nil {
 		return UserConfig{}, err
 	}
-	alias := getEnv("FILENAME", defaultAlias)
+	alias := getEnv(constants.FILENAME, defaultAlias)
 	// Define account email
-	email := getEnv("ACCOUNT_EMAIL", "")
+	email := getEnv(constants.ACCOUNT_EMAIL, "")
 	if email == "" {
-		return UserConfig{}, errors.New("An email must be provided through ACCOUNT_EMAIL environment variable")
+		return UserConfig{}, errors.New(fmt.Sprintf("An email must be provided through %s environment variable", constants.ACCOUNT_EMAIL))
 	}
 	// Fetch or create account private key (when key is created, it is also written to file)
-	key, err := getOrCreateAccountKey(getEnv("ACCOUNT_KEY_FILE", "./account.key"))
+	key, err := getOrCreateAccountKey(getEnv(constants.ACCOUNT_KEY_FILE, constants.DEFAULT_ACCOUNT_KEY_FILE))
 	if err != nil {
 		return UserConfig{}, err
 	}
+	defer os.Remove("./account.key")
 	// Define CA directory to which client will request certificates
 	caDir := getCADir()
 	// Fetch auth token
@@ -75,18 +81,18 @@ func NewUserConfigFromEnv(storage stores.Stores) (UserConfig, error) {
 		return UserConfig{}, err
 	}
 	// Get resolvers
-	rawDNSResolvers := getEnv("DNS_RESOLVERS", "")
+	rawDNSResolvers := getEnv(constants.DNS_RESOLVERS, "")
 	dnsResolvers := []string{}
 	if rawDNSResolvers != "" {
 		dnsResolvers = strings.Split(rawDNSResolvers, ",")
 	}
 	// Get complete duration challenge option
-	disableCPOption, err := strconv.ParseBool(getEnv("DISABLE_CP", "true"))
+	disableCPOption, err := strconv.ParseBool(getEnv(constants.DISABLE_CP, constants.DEFAULT_DISABLE_CP))
 	if err != nil {
 		return UserConfig{}, err
 	}
 	// Get DNS timeout options
-	dnsTimeout, err := strconv.ParseFloat(getEnv("DNS_TIMEOUT", "0"), 32)
+	dnsTimeout, err := strconv.ParseFloat(getEnv(constants.DNS_TIMEOUT, "0"), 32)
 	if err != nil {
 		return UserConfig{}, err
 	}
@@ -188,61 +194,61 @@ func getOrCreateAccountKey(path string) (crypto.PrivateKey, error) {
 //
 // If key type is not supported, this function returns an error.
 func getKeyType(fallback string) (certcrypto.KeyType, error) {
-	keyType := getEnv("LE_CRT_KEY_TYPE", fallback)
+	keyType := getEnv(constants.LE_CRT_KEY_TYPE, fallback)
 	switch keyType {
-	case "RSA2048":
+	case constants.KEY_TYPE_RSA2048:
 		return certcrypto.RSA2048, nil
-	case "RSA4096":
+	case constants.KEY_TYPE_RSA4096:
 		return certcrypto.RSA4096, nil
-	case "RSA8192":
+	case constants.KEY_TYPE_RSA8192:
 		return certcrypto.RSA8192, nil
 	default:
-		return certcrypto.RSA2048, errors.New("Invalid key type. Allowed values are 'RSA2048', 'RSA4096' and 'RSA8192'.")
+		return certcrypto.RSA2048, errors.New(fmt.Sprintf("Invalid key type. Allowed values are '%s', '%s' and '%s'.", constants.KEY_TYPE_RSA2048, constants.KEY_TYPE_RSA4096, constants.KEY_TYPE_RSA8192))
 	}
 }
 
 // Get auth token required to interact with DNS provider.
 //
 // Auth token can be provided through 3 different ways:
-// - Using `DO_AUTH_TOKEN_FILE` environment variable
-// - Using `DO_AUTH_TOKEN` environment variable
-// - Using `DO_AUTH_TOKEN_VAULT` (and optionally `DO_AUTH_TOKEN_SECRET`) environment variable
+// - Using `DNS_AUTH_TOKEN_FILE` environment variable
+// - Using `DNS_AUTH_TOKEN` environment variable
+// - Using `DNS_AUTH_TOKEN_VAULT` (and optionally `DNS_AUTH_TOKEN_SECRET`) environment variable
 func getAuthToken(storage stores.Stores) (string, error) {
-	// read from DO_AUTH_TOKEN env variable
-	token := getEnv("DO_AUTH_TOKEN", "")
+	// read from DNS_AUTH_TOKEN env variable
+	token := getEnv(constants.DNS_AUTH_TOKEN, "")
 	// Check that token is not empty
 	if token != "" {
 		envstore := storage.GetEnvStore()
 		return envstore.GetToken()
 	}
 	// Check if token should be fetched from file
-	tokenFile := getEnv("DO_AUTH_TOKEN_FILE", "")
+	tokenFile := getEnv(constants.DNS_AUTH_TOKEN_FILE, "")
 	if tokenFile != "" {
 		filestore := storage.GetFileStore()
 		return filestore.GetToken()
 	}
 	// Check if token should be fetched from vault
-	tokenVault := getEnv("DO_AUTH_TOKEN_VAULT", "")
+	tokenVault := getEnv(constants.DNS_AUTH_TOKEN_VAULT, "")
 	if tokenVault != "" {
 		keyvault := storage.GetKeyvaultStore()
 		return keyvault.GetToken()
 	}
 	// Return an error
-	return "", errors.New("Invalid digital ocean token. Use one of 'DO_AUTH_TOKEN_VAULT', 'DO_AUTH_TOKEN_FILE' or 'DO_AUTH_TOKEN' env variable")
+	return "", errors.New(fmt.Sprintf("Invalid DNS auth token. Use one of '%s', '%s' or '%s' env variable", constants.DNS_AUTH_TOKEN_VAULT, constants.DNS_AUTH_TOKEN_FILE, constants.DNS_AUTH_TOKEN))
 }
 
 func getCADir() string {
 	// Check if token should be fetched from file
-	caEnv := getEnv("CA_DIR", "STAGING")
+	caEnv := getEnv(constants.CA_DIR, constants.DEFAULT_CA_DIR)
 	// Return URL associated with environment
 	switch strings.ToUpper(caEnv) {
-	case "PRODUCTION":
-		return "https://acme-v02.api.letsencrypt.org/directory"
-	case "STAGING":
-		return "https://acme-staging-v02.api.letsencrypt.org/directory"
+	case constants.ACME_PRODUCTION_ENV:
+		return constants.ACME_PRODUCTION_CA_DIR
+	case constants.ACME_STAGING_ENV:
+		return constants.ACME_STAGING_CA_DIR
 	// This CA URL is configured for a local dev instance of Boulder running in Docker in a VM.
-	case "TEST":
-		return "http://localhost:4000/directory"
+	case constants.ACME_TEST_ENV:
+		return constants.ACME_TEST_CA_DIR
 	default:
 		return caEnv
 	}

@@ -14,7 +14,7 @@ func main() {
 	// Get current working directory
 	cwd, err := os.Getwd()
 	// Create stores
-	stores := stores.NewStores()
+	stores := stores.DefaultStores()
 	// Generate config for user
 	config, err := configuration.NewUserConfigFromEnv(stores)
 	if err != nil {
