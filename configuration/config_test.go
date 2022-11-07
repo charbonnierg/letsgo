@@ -1,4 +1,4 @@
-package letsgo
+package configuration
 
 import (
 	"bytes"
@@ -6,9 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/charbonnierg/letsgo/stores"
 	"github.com/go-acme/lego/v4/certcrypto"
+	"golang.org/x/exp/slices"
 )
 
 // Test that domain names are sanitized into valid filenames
@@ -184,7 +186,7 @@ func TestGetAuthTokenFail(t *testing.T) {
 	if token != "" || err == nil {
 		t.Errorf(fmt.Sprintf("Expected empty token and error, got token: %s", token))
 	}
-	err_want := "Invalid digital ocean token. Use one of 'DO_AUTH_TOKEN_VAULT', 'DO_AUTH_TOKEN_FILE' or 'DO_AUTH_TOKEN' env variable."
+	err_want := "Invalid digital ocean token. Use one of 'DO_AUTH_TOKEN_VAULT', 'DO_AUTH_TOKEN_FILE' or 'DO_AUTH_TOKEN' env variable"
 	err_got := err.Error()
 	if err_want != err_got {
 		t.Errorf(fmt.Sprintf("Invalid error message. Want: %s. Got %s.", err_want, err_got))
@@ -230,5 +232,79 @@ func TestGetAuthTokenFromKeyVault(t *testing.T) {
 	}
 	if token != want {
 		t.Errorf(fmt.Sprintf("Bad token. Want: %s. Got: %s", want, token))
+	}
+}
+
+func TestNewUserConfigFromEnv(t *testing.T) {
+	stores := stores.NewStores()
+	_, err := NewUserConfigFromEnv(stores)
+	err_want := "A comma-separated list of domain names must be provided through DOMAINS environment variable"
+	if err == nil {
+		t.Fatalf("Expected error. Want: %s. Got: nil", err_want)
+	}
+	err_got := err.Error()
+	if err_got != err_want {
+		t.Fatalf("Bad error. Want: %s. Got: %s", err_want, err_got)
+	}
+
+	t.Setenv("DOMAINS", "example.com")
+	_, err = NewUserConfigFromEnv(stores)
+	err_want = "An email must be provided through ACCOUNT_EMAIL environment variable"
+	if err == nil {
+		t.Fatalf("Expected error. Want: %s. Got: nil", err_want)
+	}
+	err_got = err.Error()
+	if err_got != err_want {
+		t.Fatalf("Bad error. Want: %s. Got: %s", err_want, err_got)
+	}
+
+	t.Setenv("ACCOUNT_EMAIL", "support@example.com")
+	_, err = NewUserConfigFromEnv(stores)
+	err_want = "Invalid digital ocean token. Use one of 'DO_AUTH_TOKEN_VAULT', 'DO_AUTH_TOKEN_FILE' or 'DO_AUTH_TOKEN' env variable"
+	if err == nil {
+		t.Fatalf("Expected error. Want: %s. Got: nil", err_want)
+	}
+	err_got = err.Error()
+	if err_got != err_want {
+		t.Fatalf("Bad error. Want: %s. Got: %s", err_want, err_got)
+	}
+	want_token := "XXXXX"
+	t.Setenv("DO_AUTH_TOKEN", want_token)
+	config, err := NewUserConfigFromEnv(stores)
+
+	want_domains := []string{"example.com"}
+	if !slices.Equal(config.Domains, want_domains) {
+		t.Fatalf("Bad domain. Want: %s. Got: %s", config.Domains, want_domains)
+	}
+	if config.AuthToken != want_token {
+		t.Fatalf(
+			"Bad token. Want: %s. Got: %s", want_token, config.AuthToken,
+		)
+	}
+
+	want_resolvers := []string{"1.1.1.1:53"}
+	t.Setenv("DNS_RESOLVERS", want_resolvers[0])
+	config, err = NewUserConfigFromEnv(stores)
+	if !slices.Equal(config.DNSResolvers, want_resolvers) {
+		t.Fatalf("Bad resolvers. Want: %s. Got: %s", want_resolvers, config.DNSResolvers)
+	}
+
+	want_timeout := 12.0
+	t.Setenv("DNS_TIMEOUT", fmt.Sprintf("%f", want_timeout))
+	config, err = NewUserConfigFromEnv(stores)
+	if config.DNSTimeout != time.Second*time.Duration(want_timeout) {
+		t.Fatalf("Bad resolvers. Want: %s. Got: %s", time.Second*time.Duration(want_timeout), config.DNSTimeout)
+	}
+
+	t.Setenv("DISABLE_CP", "false")
+	config, err = NewUserConfigFromEnv(stores)
+	if config.DisableCP {
+		t.Fatalf("Bad DisableCP option. Want: false. Got: true")
+	}
+
+	t.Setenv("DISABLE_CP", "true")
+	config, err = NewUserConfigFromEnv(stores)
+	if !config.DisableCP {
+		t.Fatalf("Bad DisableCP option. Want: true. Got: false")
 	}
 }

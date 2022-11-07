@@ -31,6 +31,7 @@ This library is designed to work only with DNS-01 challenges, using Digital Ocea
 | Environment Variable | Optional | Default         | Description                                      |
 |----------------------|----------|-----------------|--------------------------------------------------|
 | `DOMAINS`            | 💥   |                 | Comma-separated list of domain names             |
+| `FILENAME`            | ✅   |                 | Name under which certificate files will be stored. Default to the first domain found within `DOMAINS` envionment variable, after replacing `*` with `_`. This variable is not used when requesting the certificate, only when criting certificate to file.             |
 
 > `DOMAINS` environment variable must be set to a non-null value.
 
