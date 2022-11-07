@@ -1,5 +1,7 @@
 # Minimal Let's Encrypt CLI
 
+[![Docker size](https://badgen.net/docker/size/quara/letsgo/v0.6.0/amd64)](https://hub.docker.com/r/quara/letsgo)
+
 The goal of this project is to offer a binary, as small as possible, which can generate valid TLS certificates
 issued by Let's Encrypt, while fetching necessary tokens from a remote keystore (Azure Key Vault).
 
