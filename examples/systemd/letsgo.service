@@ -1,0 +1,11 @@
+[Unit]
+Description=Generate TLS certificates using letsgo
+Wants=letsgo.timer
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/letsgo
+EnvironmentFile=/etc/letsgo/environment
+
+[Install]
+WantedBy=multi-user.target

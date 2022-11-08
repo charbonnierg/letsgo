@@ -1,0 +1,22 @@
+# Azure keyvault where DNS auth token is stored
+DNS_AUTH_TOKEN_VAULT=example-keyvault
+# Domain names
+DOMAINS=node.example.com,*.node.example.com
+# Directory where certificates are generated
+OUTPUT_DIRECTORY=/etc/letsgo/certificates
+# Certificate name will be node.crt, key name will be node.key and issuer will be node.issuer.crt
+FILENAME=node
+# Let's Encrypt account email
+# Emails with domain "example.com" are not allowed by Let's Encrypt CA directories
+ACCOUNT_EMAIL=support@example.com
+# File where Let's Encrypt account key is stored
+ACCOUNT_KEY_FILE=/etc/letsgo/account.key
+# Agree to Let's Encrypt terms of service
+LE_TOS_AGREED=true
+# Use Let's Encrypt staging CA directory
+CA_DIR=STAGING
+# Azure credentials
+# Default values are randomly generated
+AZURE_TENANT_ID=689e6f2e-2965-4e4a-8dbd-c9851c6bc4d0
+AZURE_CLIENT_ID=73224c40-ae9e-4b2f-a69a-fa93cd433ee4
+AZURE_CLIENT_SECRET=ff~800141f96ae62dP2_c9RQ10J.33d3

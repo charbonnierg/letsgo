@@ -1,0 +1,13 @@
+[Unit]
+Description=Timer to generate TLS certificates using letsgo
+Requires=letsgo.service
+
+[Timer]
+Unit=letsgo.service
+# Run every sunday
+OnCalendar=Sun *-*-* 00:00:00
+# Run every minute (to test)
+# OnCalendar=*-*-* *:*:00
+
+[Install]
+WantedBy=timers.target
